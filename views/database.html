@@ -1,0 +1,250 @@
+<!-- views/database.html – Jira Style Issue List & Database Grid -->
+<div ng-controller="DatabaseController">
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">Issue Navigator & Database</h1>
+    <p class="page-subtitle">Inline-editable spreadsheet view of all project issues. Changes auto-save.</p>
+  </div>
+
+  <div class="db-wrapper">
+
+    <!-- Toolbar (Jira Style) -->
+    <div class="db-toolbar">
+      <div class="db-toolbar-left">
+
+        <!-- Search -->
+        <div class="search-input-wrap">
+          <i class="bi bi-search"></i>
+          <input type="text" class="search-input" placeholder="Search issues…" ng-model="searchQuery" />
+        </div>
+
+        <!-- Status Filter -->
+        <select class="form-select-light" ng-model="filterStatus">
+          <option value="">All Statuses</option>
+          <option value="todo">To Do</option>
+          <option value="in_progress">In Progress</option>
+          <option value="blocked">Blocked</option>
+          <option value="done">Done</option>
+        </select>
+
+        <!-- Category Filter -->
+        <select class="form-select-light" ng-model="filterCat">
+          <option value="">All Categories</option>
+          <optgroup ng-repeat="type in types"
+                    label="{{type | typeLabel}}"
+                    ng-if="(categories | filter:{type: type}).length > 0">
+            <option ng-repeat="c in categories | filter:{type: type}" value="{{c.id}}">{{c.name}}</option>
+          </optgroup>
+        </select>
+
+      </div>
+
+      <div class="db-toolbar-right">
+        <span class="save-indicator saving" ng-if="savingId">
+          <span class="pulse-dot"></span> Saving…
+        </span>
+        <span class="save-indicator saved" ng-if="savedId && !savingId">
+          <i class="bi bi-check2-circle"></i> Saved
+        </span>
+
+        <span style="font-size:12px;color:var(--text-subtlest);font-weight:600;">
+          {{(tasks | filter:{title:searchQuery} | filter:(filterStatus ? {status:filterStatus}:{}) | filter:(filterCat ? {course_id:filterCat}:{})).length}} issues
+        </span>
+
+        <button class="btn primary small-btn" ng-click="addNewRow()">
+          <i class="bi bi-plus-lg"></i> Add Row
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-overlay" ng-if="loading">
+      <div class="spinner-ring"></div>
+      <span>Loading issues…</span>
+    </div>
+
+    <!-- Data Table -->
+    <div class="data-table-wrap" ng-if="!loading">
+      <table class="table data-table">
+        <thead>
+          <tr>
+            <th style="width:85px;">Key</th>
+            <th ng-click="setSort('title')">
+              Summary <i class="bi {{sortIcon('title')}}"></i>
+            </th>
+            <th ng-click="setSort('course_name')">
+              Category <i class="bi {{sortIcon('course_name')}}"></i>
+            </th>
+            <th ng-click="setSort('due_date')">
+              Due Date <i class="bi {{sortIcon('due_date')}}"></i>
+            </th>
+            <th ng-click="setSort('status')">
+              Status <i class="bi {{sortIcon('status')}}"></i>
+            </th>
+            <th ng-click="setSort('priority')">
+              Priority <i class="bi {{sortIcon('priority')}}"></i>
+            </th>
+            <th>Countdown</th>
+            <th style="width:76px;text-align:right;">Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+
+          <!-- New Row Inline Creator -->
+          <tr class="new-row-inputs" ng-if="newRow">
+            <td>
+              <span class="badge b-blue" style="font-size:10px;">NEW</span>
+            </td>
+            <td>
+              <input type="text" class="cell-input" ng-model="newRow.title"
+                     placeholder="Issue summary…" autofocus
+                     ng-keydown="$event.keyCode===13 && saveNewRow()" />
+            </td>
+            <td>
+              <select class="cell-select" ng-model="newRow.course_id">
+                <option value="">None</option>
+                <optgroup ng-repeat="type in types"
+                          label="{{type | typeLabel}}"
+                          ng-if="(categories | filter:{type: type}).length > 0">
+                  <option ng-repeat="c in categories | filter:{type: type}" value="{{c.id}}">{{c.name}}</option>
+                </optgroup>
+              </select>
+            </td>
+            <td><input type="date" class="cell-input" ng-model="newRow.due_date" /></td>
+            <td>
+              <select class="cell-select" ng-model="newRow.status">
+                <option ng-repeat="s in statuses" value="{{s}}">{{s | replace:'_':' ' | titlecase}}</option>
+              </select>
+            </td>
+            <td>
+              <select class="cell-select" ng-model="newRow.priority">
+                <option ng-repeat="p in priorities" value="{{p}}">{{p | titlecase}}</option>
+              </select>
+            </td>
+            <td>—</td>
+            <td style="text-align:right;">
+              <div class="d-inline-flex gap-1">
+                <button class="btn-icon" ng-click="saveNewRow()" title="Save" style="color:var(--success);">
+                  <i class="bi bi-check-lg"></i>
+                </button>
+                <button class="btn-icon danger" ng-click="cancelNewRow()" title="Cancel">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Existing Issues -->
+          <tr ng-repeat="task in tasks
+                | filter:{title:searchQuery}
+                | filter:(filterStatus ? {status:filterStatus}:{})
+                | filter:(filterCat ? {course_id:filterCat}:{})
+                | orderBy:sortField:sortReverse"
+              ng-class="{'opacity-50': task.status==='done'}">
+
+            <!-- Issue Key -->
+            <td>
+              <span class="issue-key">
+                <span class="issue-icon"></span>
+                PF-{{task.id}}
+              </span>
+            </td>
+
+            <!-- Summary / Title -->
+            <td style="min-width:220px;">
+              <input type="text" class="cell-input" ng-model="task.title"
+                     ng-blur="onCellChange(task, 'title')" />
+            </td>
+
+            <!-- Category Component -->
+            <td style="min-width:140px;">
+              <span ng-if="task.course_name" class="category-badge"
+                    ng-style="{'background': task.course_color || 'var(--brand)'}">
+                <span class="category-dot"></span>{{task.course_name}}
+              </span>
+              <span ng-if="!task.course_name" style="color:var(--text-subtlest);">—</span>
+            </td>
+
+            <!-- Due Date -->
+            <td style="min-width:130px;">
+              <input type="date" class="cell-input" ng-model="task.due_date"
+                     ng-blur="onCellChange(task, 'due_date')" style="font-size:12px;" />
+            </td>
+
+            <!-- Status (Jira Status Lozenge) -->
+            <td>
+              <div class="d-flex align-items-center gap-1">
+                <select class="cell-select" ng-model="task.status"
+                        ng-change="onCellChange(task, 'status')">
+                  <option ng-repeat="s in statuses" value="{{s}}">{{s | replace:'_':' ' | titlecase}}</option>
+                </select>
+                <span class="badge"
+                      ng-class="{
+                        'badge-status-todo':        task.status==='todo',
+                        'b-blue':                   task.status==='in_progress',
+                        'b-red':                    task.status==='blocked',
+                        'b-green':                  task.status==='done'
+                      }">
+                  {{task.status | replace:'_':' '}}
+                </span>
+              </div>
+            </td>
+
+            <!-- Priority (Jira Priority Indicator) -->
+            <td>
+              <div class="d-flex align-items-center gap-1">
+                <select class="cell-select" ng-model="task.priority"
+                        ng-change="onCellChange(task, 'priority')">
+                  <option ng-repeat="p in priorities" value="{{p}}">{{p | titlecase}}</option>
+                </select>
+                <span class="priority-jira {{task.priority}}">
+                  <i class="bi"
+                     ng-class="{
+                       'bi-chevron-double-up': task.priority==='high',
+                       'bi-dash-lg': task.priority==='medium',
+                       'bi-chevron-down': task.priority==='low'
+                     }"></i>
+                </span>
+              </div>
+            </td>
+
+            <!-- Deadline Countdown -->
+            <td style="min-width:110px;">
+              <span ng-if="task.due_date" class="countdown-badge"
+                    ng-class="{
+                      'overdue': task.hours_until_due < 0,
+                      'urgent':  task.hours_until_due >= 0 && task.hours_until_due < 24,
+                      'soon':    task.hours_until_due >= 24 && task.hours_until_due < 72,
+                      'ok':      task.hours_until_due >= 72
+                    }">
+                <i class="bi bi-hourglass-split"></i> {{task.due_date | countdown}}
+              </span>
+              <span ng-if="!task.due_date" style="color:var(--text-subtlest);">—</span>
+            </td>
+
+            <!-- Actions -->
+            <td style="text-align:right;">
+              <div class="d-inline-flex gap-1">
+                <a href="#!/notes/{{task.id}}" class="btn-icon" title="Open Notes">
+                  <i class="bi bi-journals"></i>
+                </a>
+                <button class="btn-icon danger" ng-click="deleteTask(task)" title="Delete Issue">
+                  <i class="bi bi-trash3"></i>
+                </button>
+              </div>
+            </td>
+
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Jira "+ Create" Row Prompt -->
+      <button class="add-row-btn" ng-click="addNewRow()" ng-if="!newRow">
+        <i class="bi bi-plus-lg"></i> Create another row
+      </button>
+    </div>
+
+  </div><!-- /db-wrapper -->
+</div>

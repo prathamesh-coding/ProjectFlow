@@ -1,0 +1,227 @@
+<!-- views/notes.html – Jira / Confluence Style Task Canvas -->
+<div ng-controller="NotesController">
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">Issue Notes & Canvas</h1>
+    <p class="page-subtitle">Document specifications, technical notes, and updates for any issue. Auto-saves live.</p>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" ng-if="loading">
+    <div class="spinner-ring"></div>
+    <span>Loading issues…</span>
+  </div>
+
+  <!-- Layout -->
+  <div class="notes-layout" ng-if="!loading">
+
+    <!-- ── SIDEBAR (Jira Issue Navigator) ──────────────────── -->
+    <div class="notes-sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title">Issues</div>
+        <div class="search-input-wrap" style="width:100%;">
+          <i class="bi bi-search"></i>
+          <input type="text" class="search-input" style="width:100%;"
+                 placeholder="Search issues…" ng-model="searchQuery" />
+        </div>
+      </div>
+
+      <div class="sidebar-list">
+        <div ng-if="(tasks | filter:{title:searchQuery}).length === 0" class="empty-column" style="padding:24px 10px;">
+          <i class="bi bi-inbox"></i> No issues found
+        </div>
+
+        <div class="sidebar-task-item"
+             ng-repeat="task in tasks | filter:{title:searchQuery}"
+             ng-class="{ active: activeTask && activeTask.id === task.id }"
+             ng-click="openTask(task)">
+
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="issue-key">
+              <span class="issue-icon"></span>
+              PF-{{task.id}}
+            </span>
+
+            <span class="priority-jira {{task.priority}}">
+              <i class="bi"
+                 ng-class="{
+                   'bi-chevron-double-up': task.priority==='high',
+                   'bi-dash-lg': task.priority==='medium',
+                   'bi-chevron-down': task.priority==='low'
+                 }"></i>
+            </span>
+          </div>
+
+          <div class="sidebar-task-title">{{task.title}}</div>
+
+          <div class="sidebar-task-meta">
+            <span class="badge"
+                  ng-class="{
+                    'badge-status-todo':        task.status==='todo',
+                    'b-blue':                   task.status==='in_progress',
+                    'b-red':                    task.status==='blocked',
+                    'b-green':                  task.status==='done'
+                  }">
+              {{task.status | replace:'_':' '}}
+            </span>
+
+            <span ng-if="task.course_name" class="category-badge"
+                  ng-style="{'background': task.course_color || 'var(--brand)'}">
+              <span class="category-dot"></span>{{task.course_name}}
+            </span>
+          </div>
+
+          <div style="font-size:11px;margin-top:4px;font-weight:600;" ng-if="task.due_date"
+               ng-class="{
+                 'text-danger':  task.hours_until_due < 24,
+                 'text-warning': task.hours_until_due >= 24 && task.hours_until_due < 72
+               }"
+               style="color:var(--text-subtlest);">
+            <i class="bi bi-clock me-1"></i>{{task.due_date | countdown}}
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /sidebar -->
+
+    <!-- ── CANVAS (Confluence / Jira Document Editor) ──────── -->
+    <div class="notes-canvas">
+
+      <!-- Empty state -->
+      <div class="canvas-empty" ng-if="!activeTask">
+        <i class="bi bi-journal-text"></i>
+        <p>Select an issue from the list to view and edit its notes & details.</p>
+      </div>
+
+      <!-- Editor -->
+      <div ng-if="activeTask">
+
+        <!-- Header: Key, Title + Jira Meta Chips -->
+        <div class="canvas-header">
+
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="issue-icon"></span>
+            <span class="issue-key" style="font-size:13px;">PF-{{activeTask.id}}</span>
+            <span class="badge"
+                  ng-class="{
+                    'badge-status-todo':        activeTask.status==='todo',
+                    'b-blue':                   activeTask.status==='in_progress',
+                    'b-red':                    activeTask.status==='blocked',
+                    'b-green':                  activeTask.status==='done'
+                  }">
+              {{activeTask.status | replace:'_':' '}}
+            </span>
+          </div>
+
+          <input type="text" class="canvas-title-input"
+                 ng-model="activeTask.title"
+                 ng-blur="onMetaChange('title')"
+                 placeholder="Untitled Issue" />
+
+          <div class="canvas-meta-row">
+
+            <!-- Status chip -->
+            <div class="meta-chip">
+              <label>Status</label>
+              <select ng-model="activeTask.status" ng-change="onMetaChange('status')">
+                <option value="todo">To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="blocked">Blocked</option>
+                <option value="done">Done</option>
+              </select>
+            </div>
+
+            <!-- Priority chip -->
+            <div class="meta-chip">
+              <label>Priority</label>
+              <select ng-model="activeTask.priority" ng-change="onMetaChange('priority')">
+                <option value="low">🟢 Low</option>
+                <option value="medium">🟡 Medium</option>
+                <option value="high">🔴 High</option>
+              </select>
+            </div>
+
+            <!-- Category chip -->
+            <div class="meta-chip">
+              <div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;"
+                   ng-style="{'background': getCategoryById(activeTask.course_id) ? getCategoryById(activeTask.course_id).color_code : 'var(--brand)'}"></div>
+              <label>Category</label>
+              <select ng-model="activeTask.course_id" ng-change="onMetaChange('course_id')">
+                <option value="">None</option>
+                <option ng-repeat="c in categories" value="{{c.id}}">{{c.name}}</option>
+              </select>
+            </div>
+
+            <!-- Due Date chip -->
+            <div class="meta-chip">
+              <label>Due</label>
+              <input type="date" ng-model="activeTask.due_date" ng-blur="onMetaChange('due_date')" />
+            </div>
+
+            <!-- Delete -->
+            <div style="margin-left:auto;">
+              <button class="btn danger small-btn" ng-click="deleteActiveTask()">
+                <i class="bi bi-trash3 me-1"></i> Delete Issue
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Rich Text Toolbar (Jira / Confluence Editor Style) -->
+        <div class="editor-toolbar">
+          <button class="toolbar-btn" ng-click="execFormat('bold')"         title="Bold">        <strong>B</strong></button>
+          <button class="toolbar-btn" ng-click="execFormat('italic')"       title="Italic">      <em>I</em>        </button>
+          <button class="toolbar-btn" ng-click="execFormat('underline')"    title="Underline">   <u>U</u>          </button>
+          <button class="toolbar-btn" ng-click="execFormat('strikeThrough')" title="Strike">     <s>S</s>          </button>
+
+          <div class="toolbar-divider"></div>
+
+          <button class="toolbar-btn" ng-click="execFormat('formatBlock','h1')" title="Heading 1">H1</button>
+          <button class="toolbar-btn" ng-click="execFormat('formatBlock','h2')" title="Heading 2">H2</button>
+          <button class="toolbar-btn" ng-click="execFormat('formatBlock','h3')" title="Heading 3">H3</button>
+          <button class="toolbar-btn" ng-click="execFormat('formatBlock','p')"  title="Paragraph">¶ </button>
+
+          <div class="toolbar-divider"></div>
+
+          <button class="toolbar-btn" ng-click="execFormat('insertUnorderedList')" title="Bullet List"><i class="bi bi-list-ul"></i></button>
+          <button class="toolbar-btn" ng-click="execFormat('insertOrderedList')"   title="Numbered List"><i class="bi bi-list-ol"></i></button>
+          <button class="toolbar-btn" ng-click="execFormat('formatBlock','blockquote')" title="Quote"><i class="bi bi-quote"></i></button>
+          <button class="toolbar-btn" ng-click="execFormat('formatBlock','pre')"        title="Code"><i class="bi bi-code-slash"></i></button>
+
+          <div class="toolbar-divider"></div>
+
+          <button class="toolbar-btn" ng-click="execFormat('justifyLeft')"   title="Align Left"><i class="bi bi-text-left"></i></button>
+          <button class="toolbar-btn" ng-click="execFormat('justifyCenter')" title="Center"><i class="bi bi-text-center"></i></button>
+          <button class="toolbar-btn" ng-click="execFormat('justifyRight')"  title="Align Right"><i class="bi bi-text-right"></i></button>
+
+          <div class="toolbar-divider"></div>
+
+          <button class="toolbar-btn" ng-click="execFormat('undo')" title="Undo"><i class="bi bi-arrow-counterclockwise"></i></button>
+          <button class="toolbar-btn" ng-click="execFormat('redo')" title="Redo"><i class="bi bi-arrow-clockwise"></i></button>
+
+          <!-- Save Status -->
+          <div class="save-indicator ms-auto" ng-class="saveStatus">
+            <span ng-if="saveStatus==='saving'"><span class="pulse-dot"></span> Saving…</span>
+            <span ng-if="saveStatus==='saved'"><i class="bi bi-check2-circle"></i> Saved</span>
+          </div>
+        </div>
+
+        <!-- Editor body -->
+        <div class="editor-body">
+          <div id="notesEditor"
+               class="notes-editor"
+               contenteditable="true"
+               ng-model="activeTask.notes_body"
+               ng-change="onNotesChange()"
+               data-placeholder="Describe the issue, write requirements, acceptance criteria, or technical notes… ✍️">
+          </div>
+        </div>
+
+      </div><!-- /ng-if activeTask -->
+
+    </div><!-- /notes-canvas -->
+  </div><!-- /notes-layout -->
+
+</div>

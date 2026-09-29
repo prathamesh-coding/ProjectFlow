@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="studentPM" data-theme="light">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="ProjectFlow – Jira-style universal project & task manager." />
+  <title>ProjectFlow – Jira × Atlassian Project Management</title>
+
+  <!-- Prevent flash of wrong theme -->
+  <script>
+    (function () {
+      var saved = localStorage.getItem('jira-style-theme');
+      if (saved) document.documentElement.dataset.theme = saved;
+    })();
+  </script>
+
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="assets/css/bootstrap.min.css" />
+  <!-- Jira Styleguide CSS -->
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+
+<body ng-controller="MainController">
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       TOP NAVIGATION BAR (JIRA STYLE)
+  ═══════════════════════════════════════════════════════════════════ -->
+  <nav class="topbar">
+
+    <div class="topbar-left">
+      <!-- Jira Mark Brand -->
+      <a href="#!/dashboard" class="brand-link">
+        <span class="jira-mark"></span>
+        <span class="brand-text">ProjectFlow</span>
+      </a>
+
+      <div class="topbar-divider d-none d-md-block"></div>
+
+      <!-- Jira Project Breadcrumb -->
+      <div class="breadcrumb-jira d-none d-md-flex">
+        <span class="project-icon">PF</span>
+        <span class="project-name">ProjectFlow</span>
+        <span class="sep">/</span>
+        <span>{{currentViewName()}}</span>
+      </div>
+
+      <!-- Nav Tabs -->
+      <div class="topbar-nav">
+        <a href="#!/dashboard" class="nav-pill" ng-class="{ active: isActive('/dashboard') }">
+          <i class="bi bi-kanban"></i> Board
+        </a>
+        <a href="#!/database" class="nav-pill" ng-class="{ active: isActive('/database') }">
+          <i class="bi bi-table"></i> Database
+        </a>
+        <a href="#!/notes" class="nav-pill" ng-class="{ active: isActive('/notes') }">
+          <i class="bi bi-journals"></i> Notes
+        </a>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="topbar-actions">
+
+      <!-- Manage Categories -->
+      <button class="btn secondary small-btn" id="openCatModalBtn" data-bs-toggle="modal"
+        data-bs-target="#categoriesModal" ng-click="openNewCatForm()" title="Manage Categories">
+        <i class="bi bi-tags"></i>
+        <span class="d-none d-sm-inline">Categories</span>
+        <span class="badge b-blue" style="font-size:10px;padding:1px 6px;">{{categories.length}}</span>
+      </button>
+
+      <!-- Quick Add Issue / Task -->
+      <button class="btn primary small-btn" id="openQuickAddBtn" data-bs-toggle="modal" data-bs-target="#quickAddModal">
+        <i class="bi bi-plus-lg"></i>
+        <span>Create</span>
+      </button>
+
+      <!-- Jira Dark/Light Mode Toggle -->
+      <button class="icon-btn" title="Toggle theme (Light / Dark)" ng-click="toggleTheme()">
+        <i class="bi" ng-class="currentTheme==='dark' ? 'bi-sun-fill' : 'bi-moon-stars'"></i>
+      </button>
+
+      <!-- Jira User Avatar -->
+      <div class="avatar sm" title="Alex Johnson">AJ</div>
+
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       ANGULAR VIEW OUTLET
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="app-content" ng-view></div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       QUICK ADD TASK / ISSUE MODAL
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="modal fade" id="quickAddModal" tabindex="-1" aria-labelledby="qaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+
+        <div class="modal-header">
+          <div class="d-flex align-items-center gap-2">
+            <span class="issue-icon"></span>
+            <h5 class="modal-title" id="qaLabel">Create Issue</h5>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          <form ng-submit="quickAddTask()">
+
+            <!-- Summary / Title -->
+            <div class="field">
+              <label class="label" for="qaTitle">Summary *</label>
+              <input type="text" id="qaTitle" class="input" ng-model="newTask.title"
+                placeholder="What needs to be done?" autofocus required />
+              <span class="help">Keep the summary short and action-oriented.</span>
+            </div>
+
+            <div class="row g-3">
+
+              <!-- Category / Component -->
+              <div class="col-12">
+                <div class="field">
+                  <label class="label" for="qaCategory">Category / Component</label>
+                  <select id="qaCategory" class="input" ng-model="newTask.category_id">
+                    <option value="">— None —</option>
+                    <optgroup ng-repeat="type in typeOrder" label="{{type | typeLabel}}">
+                      <option ng-repeat="c in categories | filter:{type: type}" value="{{c.id}}">
+                        {{c.name}}
+                      </option>
+                    </optgroup>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Priority -->
+              <div class="col-6">
+                <div class="field">
+                  <label class="label" for="qaPriority">Priority</label>
+                  <select id="qaPriority" class="input" ng-model="newTask.priority">
+                    <option value="low">🟢 Low</option>
+                    <option value="medium">🟡 Medium</option>
+                    <option value="high">🔴 High</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Status -->
+              <div class="col-6">
+                <div class="field">
+                  <label class="label" for="qaStatus">Status</label>
+                  <select id="qaStatus" class="input" ng-model="newTask.status">
+                    <option value="todo">To Do</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="blocked">Blocked</option>
+                    <option value="done">Done</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Due Date -->
+              <div class="col-12">
+                <div class="field">
+                  <label class="label" for="qaDue">Due Date (optional)</label>
+                  <input type="datetime-local" id="qaDue" class="input" ng-model="newTask.due_date" />
+                </div>
+              </div>
+
+            </div>
+          </form>
+        </div>
+
+        <div class="modal-footer d-flex justify-content-between">
+          <button type="button" class="btn secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn primary" id="qaSubmitBtn" ng-click="quickAddTask()"
+            ng-disabled="!newTask.title.trim() || isLoading">
+            <span ng-if="!isLoading"><i class="bi bi-plus-lg me-1"></i> Create Issue</span>
+            <span ng-if="isLoading"><span class="pulse-dot me-1"></span> Creating…</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       CATEGORIES MANAGER MODAL (JIRA STYLE)
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="modal fade" id="categoriesModal" tabindex="-1" aria-labelledby="catLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+      <div class="modal-content">
+
+        <div class="modal-header">
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-tags" style="color:var(--brand);font-size:18px;"></i>
+            <h5 class="modal-title" id="catLabel">Manage Project Categories</h5>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body" style="padding:20px 24px !important;">
+          <div class="row g-4">
+
+            <!-- LEFT: Category List ──────────────────────────────── -->
+            <div class="col-lg-7">
+              <div
+                style="font-size:11px;font-weight:700;color:var(--text-subtlest);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">
+                Categories & Components ({{categories.length}})
+              </div>
+
+              <!-- Empty state -->
+              <div ng-if="categories.length === 0" class="empty-column" style="padding:32px;">
+                <i class="bi bi-tag"></i>
+                <p>No categories yet. Create your first one on the right.</p>
+              </div>
+
+              <!-- Grouped by type -->
+              <div ng-repeat="type in typeOrder">
+                <div ng-if="(categories | filter:{type: type}).length > 0">
+                  <div class="category-group-header">
+                    <i class="bi {{typeIcon(type)}} me-1"></i>{{typeLabel(type)}}
+                  </div>
+
+                  <div class="categories-grid" style="max-height:none;">
+                    <div class="category-card" ng-repeat="cat in categories | filter:{type: type}"
+                      ng-style="editingCat && editingCat.id === cat.id ? {'border-color':'var(--brand)', 'background':'var(--brand-subtle)'} : {}">
+
+                      <div class="category-card-left">
+                        <div class="category-swatch" ng-style="{'background': cat.color_code}">
+                          <i class="bi {{typeIcon(cat.type)}}" style="color:#ffffff;"></i>
+                        </div>
+                        <div class="category-info">
+                          <div class="category-name">{{cat.name}}</div>
+                          <div class="category-meta">
+                            <span class="type-badge {{typeCss(cat.type)}}">{{typeLabel(cat.type)}}</span>
+                            <span class="category-task-count">
+                              <i class="bi bi-check2-square"></i> {{cat.total_tasks || 0}} issues
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="category-card-actions">
+                        <button class="btn-icon" ng-click="editCategory(cat)" title="Edit Category">
+                          <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn-icon danger" ng-click="deleteCategory(cat)" title="Delete Category">
+                          <i class="bi bi-trash3"></i>
+                        </button>
+                      </div>
+
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- RIGHT: Create / Edit Form ───────────────────────── -->
+            <div class="col-lg-5">
+              <div class="panel" style="background:var(--surface-sunken);">
+
+                <div
+                  style="font-size:11px;font-weight:700;color:var(--text-subtlest);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;">
+                  {{editingCat ? 'Edit Category' : 'Create New Category'}}
+                </div>
+
+                <!-- Name -->
+                <div class="field">
+                  <label class="label" for="catName">Category Name *</label>
+                  <input type="text" id="catName" class="input" ng-model="catForm.name"
+                    placeholder="e.g. Frontend, API, Design, Marketing..." />
+                </div>
+
+                <!-- Type -->
+                <div class="field">
+                  <label class="label" for="catType">Scope / Type</label>
+                  <select id="catType" class="input" ng-model="catForm.type">
+                    <option value="personal">🏠 Personal</option>
+                    <option value="work">💼 Work</option>
+                    <option value="freelance">💻 Freelance / Client</option>
+                    <option value="study">📚 Study / Academic</option>
+                    <option value="other">📌 Other</option>
+                  </select>
+                </div>
+
+                <!-- Color -->
+                <div class="field">
+                  <label class="label">Color Accent</label>
+                  <div class="color-swatches">
+                    <div class="color-swatch-opt" ng-repeat="hex in presetColors" ng-style="{'background': hex}"
+                      ng-class="{ selected: isSelectedColor(hex) }" ng-click="selectColor(hex)" title="{{hex}}">
+                    </div>
+                  </div>
+                  <!-- Custom hex input -->
+                  <div class="d-flex align-items-center gap-2 mt-2">
+                    <div style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);flex-shrink:0;"
+                      ng-style="{'background': catForm.color_code}"></div>
+                    <input type="text" class="input"
+                      style="font-family:ui-monospace,monospace;font-size:12px;height:32px;padding:0 10px;"
+                      ng-model="catForm.color_code" placeholder="#0c66e4" maxlength="7" />
+                  </div>
+                </div>
+
+                <!-- Preview -->
+                <div class="field" ng-if="catForm.name">
+                  <label class="label">Preview</label>
+                  <div
+                    style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;">
+                    <div class="category-swatch" ng-style="{'background': catForm.color_code}">
+                      <i class="bi {{typeIcon(catForm.type)}}" style="color:#fff;"></i>
+                    </div>
+                    <div>
+                      <div style="font-weight:700;font-size:13px;color:var(--text);">{{catForm.name}}</div>
+                      <span class="type-badge {{typeCss(catForm.type)}}">{{typeLabel(catForm.type)}}</span>
+                    </div>
+                    <div class="category-badge ms-auto" ng-style="{'background': catForm.color_code}">
+                      <span class="category-dot"></span> {{catForm.name}}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Error -->
+                <div ng-if="catErrors" class="alert a-danger mb-3" style="padding:8px 12px;font-size:12px;">
+                  <i class="bi bi-exclamation-circle me-1"></i>{{catErrors}}
+                </div>
+
+                <div class="d-flex gap-2">
+                  <button class="btn primary" style="flex:1;" ng-click="saveCategoryForm()" ng-disabled="catSaving">
+                    <span ng-if="!catSaving">
+                      <i class="bi {{editingCat ? 'bi-check-lg' : 'bi-plus-lg'}} me-1"></i>
+                      {{editingCat ? 'Save Changes' : 'Create Category'}}
+                    </span>
+                    <span ng-if="catSaving"><span class="pulse-dot me-1"></span> Saving…</span>
+                  </button>
+                  <button class="btn secondary" ng-click="openNewCatForm()" ng-if="editingCat">
+                    Cancel
+                  </button>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       TOAST NOTIFICATIONS (JIRA STYLE)
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="toast-container">
+    <div ng-repeat="toast in toasts track by toast.id" class="toast-item toast-{{toast.type}}">
+      <i class="bi" ng-class="{
+           'bi-check-circle-fill': toast.type==='success',
+           'bi-exclamation-triangle-fill': toast.type==='warning',
+           'bi-x-circle-fill': toast.type==='danger',
+           'bi-info-circle-fill': toast.type==='info'
+         }"></i>
+      <span>{{toast.message}}</span>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       VENDOR SCRIPTS
+  ═══════════════════════════════════════════════════════════════════ -->
+  <script src="assets/js/lib/jquery.min.js"></script>
+  <script src="assets/js/lib/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/lib/angular.min.js"></script>
+  <script src="assets/js/lib/angular-route.min.js"></script>
+  <script src="assets/js/app.js"></script>
+  <script src="assets/js/services.js"></script>
+  <script src="assets/js/directives.js"></script>
+  <script src="assets/js/controllers.js"></script>
+
+</body>
+
+</html>

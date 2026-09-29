@@ -1,0 +1,152 @@
+<!-- views/dashboard.html – Jira Style Kanban Board -->
+<div ng-controller="DashboardController">
+
+  <!-- Page Header + Jira Stats -->
+  <div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+      <h1 class="page-title">Project Board</h1>
+      <p class="page-subtitle">Track, organize, and move issues through your workflow.</p>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+      <div class="stat-chip">
+        <span class="stat-chip-value" style="color:var(--text-subtle);">{{getColumnTasks('todo').length}}</span>
+        <span class="stat-chip-label">To Do</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-chip-value" style="color:var(--brand);">{{getColumnTasks('in_progress').length}}</span>
+        <span class="stat-chip-label">In Progress</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-chip-value" style="color:var(--danger);">{{getColumnTasks('blocked').length}}</span>
+        <span class="stat-chip-label">Blocked</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-chip-value" style="color:var(--success);">{{getColumnTasks('done').length}}</span>
+        <span class="stat-chip-label">Done</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Bar (Jira Style) -->
+  <div class="filter-bar">
+
+    <!-- Quick Filter: Due soon -->
+    <button class="filter-toggle" ng-class="{ active: todayOnly }" ng-click="todayOnly = !todayOnly">
+      <i class="bi bi-clock-history"></i> Due in 48h
+      <span ng-if="todayOnly" class="badge b-blue" style="font-size:9px;padding:0 5px;">ACTIVE</span>
+    </button>
+
+    <!-- Category filter -->
+    <select class="form-select-light" ng-model="filterCat">
+      <option value="">All Categories</option>
+      <optgroup ng-repeat="type in ['personal','work','freelance','study','other']"
+                label="{{type | typeLabel}}"
+                ng-if="(categories | filter:{type: type}).length > 0">
+        <option ng-repeat="c in categories | filter:{type: type}" value="{{c.id}}">{{c.name}}</option>
+      </optgroup>
+    </select>
+
+    <span style="margin-left:auto;font-size:12px;color:var(--text-subtlest);font-weight:600;">
+      {{allTasks.length}} issue{{allTasks.length !== 1 ? 's' : ''}}
+    </span>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" ng-if="loading">
+    <div class="spinner-ring"></div>
+    <span>Loading board…</span>
+  </div>
+
+  <!-- Kanban Columns -->
+  <div class="kanban-wrapper" ng-if="!loading">
+
+    <div class="kanban-column {{col.colorClass}}"
+         ng-repeat="col in columns"
+         dropzone="{{col.key}}">
+
+      <!-- Column Header -->
+      <div class="col-header">
+        <div class="col-header-left">
+          <div class="col-header-dot"></div>
+          <span>{{col.label}}</span>
+        </div>
+        <span class="col-count">{{getColumnTasks(col.key).length}}</span>
+      </div>
+
+      <!-- Cards Container -->
+      <div class="kanban-cards">
+
+        <!-- Empty state -->
+        <div ng-if="getColumnTasks(col.key).length === 0" class="empty-column">
+          <i class="bi bi-inbox"></i>
+          No issues in this column
+        </div>
+
+        <!-- Jira Issue Card -->
+        <div class="task-card"
+             ng-repeat="task in getColumnTasks(col.key)"
+             draggable="task">
+
+          <!-- Issue Header: Key + Type icon -->
+          <div class="issue-header">
+            <span class="issue-key">
+              <span class="issue-icon"></span>
+              PF-{{task.id}}
+            </span>
+
+            <!-- Jira Priority indicator -->
+            <span class="priority-jira {{task.priority}}">
+              <i class="bi"
+                 ng-class="{
+                   'bi-chevron-double-up': task.priority==='high',
+                   'bi-dash-lg': task.priority==='medium',
+                   'bi-chevron-down': task.priority==='low'
+                 }"></i>
+              {{task.priority}}
+            </span>
+          </div>
+
+          <!-- Title -->
+          <div class="task-card-title">{{task.title}}</div>
+
+          <!-- Category lozenge (Jira component style) -->
+          <div class="task-card-meta" ng-if="task.course_name">
+            <span class="category-badge"
+                  ng-style="{'background': task.course_color || 'var(--brand)'}">
+              <span class="category-dot"></span>{{task.course_name}}
+            </span>
+          </div>
+
+          <!-- Card Footer: Due date + Actions -->
+          <div class="task-card-footer">
+            <!-- Due date -->
+            <span ng-if="task.due_date" class="badge"
+                  ng-class="{
+                    'b-red':    task.hours_until_due !== null && task.hours_until_due < 24,
+                    'b-yellow': task.hours_until_due !== null && task.hours_until_due >= 24 && task.hours_until_due < 72,
+                    'b-green':  task.hours_until_due !== null && task.hours_until_due >= 72
+                  }"
+                  style="font-size:10px;">
+              <i class="bi bi-clock me-1"></i>{{task.due_date | countdown}}
+            </span>
+            <span ng-if="!task.due_date" style="font-size:11px;color:var(--text-subtlest);">No deadline</span>
+
+            <!-- Action buttons -->
+            <div class="task-card-actions">
+              <a href="#!/notes/{{task.id}}" class="btn-icon" title="Open Notes & Details">
+                <i class="bi bi-journals"></i>
+              </a>
+              <button class="btn-icon danger" ng-click="deleteTask(task)" title="Delete Issue">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </div>
+          </div>
+
+        </div><!-- /task-card -->
+      </div><!-- /kanban-cards -->
+
+    </div><!-- /kanban-column -->
+  </div><!-- /kanban-wrapper -->
+
+</div>
