@@ -1,0 +1,33 @@
+# render.yaml – Render.com Infrastructure-as-Code definition
+# Docs: https://render.com/docs/yaml-spec
+#
+# Commit this file to your repo root. Render will auto-detect it
+# and offer to create the service on first push.
+
+services:
+  - type: web
+    name: projectflow
+    runtime: docker          # use our Dockerfile
+    plan: free               # Render free tier
+    region: oregon           # closest free-tier region
+
+    # ── Environment variables ─────────────────────────────────────────────────
+    # Set these in the Render dashboard under Environment → Secret Files
+    # or add them here (not recommended for passwords in git).
+    envVars:
+      - key: DB_HOST
+        value: aws-0-ap-south-1.pooler.supabase.com
+      - key: DB_PORT
+        value: "6543"
+      - key: DB_NAME
+        value: postgres
+      - key: DB_USER
+        # Transaction pooler requires format: postgres.PROJECT_REF
+        value: postgres.vfnyrnaqrdvqapojqqor
+      - key: DB_PASS
+        sync: false          # Render will prompt you to fill this secret
+      - key: FRONTEND_URL
+        value: "*"           # restrict to your Render URL after deploy
+
+    # ── Health check ──────────────────────────────────────────────────────────
+    healthCheckPath: /api/check_auth.php

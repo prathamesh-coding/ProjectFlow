@@ -12,9 +12,10 @@ if (!$body) jsonError('Invalid JSON body');
 $id = (int)($body['id'] ?? 0);
 if (!$id) jsonError('Category ID is required');
 
+if (!isset($_SESSION['user_id'])) jsonError('Unauthorized', 401);
 $pdo  = getDB();
-$stmt = $pdo->prepare("DELETE FROM courses WHERE id = ? AND user_id = 1");
-$stmt->execute([$id]);
+$stmt = $pdo->prepare("DELETE FROM courses WHERE id = ? AND user_id = ?");
+$stmt->execute([$id, $_SESSION['user_id']]);
 
 if ($stmt->rowCount() === 0) jsonError('Category not found or already deleted', 404);
 jsonResponse(['success' => true, 'message' => 'Category deleted. Affected tasks moved to uncategorized.', 'id' => $id]);

@@ -3,10 +3,12 @@
  * create_task.php
  * POST /api/create_task.php
  * Body (JSON): { title, course_id?, status?, priority?, due_date?, notes_body? }
+ * PostgreSQL-compatible: uses RETURNING id instead of lastInsertId().
  */
 require_once __DIR__ . '/db_connect.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonError('Method not allowed', 405);
+if (!isset($_SESSION['user_id'])) jsonError('Unauthorized', 401);
 
 $body = json_decode(file_get_contents('php://input'), true);
 if (!$body) jsonError('Invalid JSON body');
@@ -21,10 +23,15 @@ $notes     = $body['notes_body'] ?? null;
 if (empty($title)) jsonError('Title is required');
 
 $pdo  = getDB();
-$stmt = $pdo->prepare("INSERT INTO tasks (user_id, course_id, title, status, priority, due_date, notes_body)
-                        VALUES (:uid, :cid, :title, :status, :priority, :due_date, :notes)");
+
+// RETURNING id is the PostgreSQL equivalent of LAST_INSERT_ID()
+$stmt = $pdo->prepare(
+    "INSERT INTO tasks (user_id, course_id, title, status, priority, due_date, notes_body)
+     VALUES (:uid, :cid, :title, :status, :priority, :due_date, :notes)
+     RETURNING id"
+);
 $stmt->execute([
-    ':uid'      => 1,
+    ':uid'      => $_SESSION['user_id'],
     ':cid'      => $course_id,
     ':title'    => $title,
     ':status'   => $status,
@@ -32,14 +39,15 @@ $stmt->execute([
     ':due_date' => $due_date,
     ':notes'    => $notes,
 ]);
-
-$newId = $pdo->lastInsertId();
+$newId = $stmt->fetchColumn();
 
 // Fetch newly created task with course join
-$fetch = $pdo->prepare("SELECT t.*, c.name AS course_name, c.color_code AS course_color
-                         FROM tasks t
-                         LEFT JOIN courses c ON t.course_id = c.id
-                         WHERE t.id = ?");
+$fetch = $pdo->prepare(
+    "SELECT t.*, c.name AS course_name, c.color_code AS course_color
+     FROM tasks t
+     LEFT JOIN courses c ON t.course_id = c.id
+     WHERE t.id = ?"
+);
 $fetch->execute([$newId]);
 $task = $fetch->fetch();
 

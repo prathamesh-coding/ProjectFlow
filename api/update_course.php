@@ -2,9 +2,11 @@
 /**
  * update_course.php - POST: update a category's name, color, or type
  * Body: { id, name?, color_code?, type? }
+ * PostgreSQL-compatible: double-quoted identifiers instead of MySQL backticks.
  */
 require_once __DIR__ . '/db_connect.php';
 if (!in_array($_SERVER['REQUEST_METHOD'], ['POST','PUT'])) jsonError('Method not allowed', 405);
+if (!isset($_SESSION['user_id'])) jsonError('Unauthorized', 401);
 
 $body = json_decode(file_get_contents('php://input'), true);
 if (!$body) jsonError('Invalid JSON body');
@@ -23,12 +25,14 @@ foreach ($allowed as $field) {
     $value = trim($body[$field]);
     if ($field === 'type' && !in_array($value, $validTypes)) continue;
     if ($field === 'name' && empty($value)) jsonError('Name cannot be empty');
-    $sets[] = "`$field` = :$field";
+    // PostgreSQL uses double-quoted identifiers (not MySQL backticks)
+    $sets[]            = "\"$field\" = :$field";
     $params[":$field"] = $value;
 }
 if (empty($sets)) jsonError('No fields to update');
 
-$stmt = $pdo->prepare("UPDATE courses SET " . implode(', ', $sets) . " WHERE id = :id AND user_id = 1");
+$params[':uid'] = $_SESSION['user_id'];
+$stmt = $pdo->prepare("UPDATE courses SET " . implode(', ', $sets) . " WHERE id = :id AND user_id = :uid");
 $stmt->execute($params);
 
 $fetch = $pdo->prepare("SELECT * FROM courses WHERE id = ?");

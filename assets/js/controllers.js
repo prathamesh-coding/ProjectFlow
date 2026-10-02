@@ -24,8 +24,8 @@
   // MainController – Global state, Quick Add, Categories Manager, Toasts
   // ════════════════════════════════════════════════════════════════════════════
   angular.module('studentPM')
-    .controller('MainController', ['$scope', '$location', 'TaskService', 'CategoryService',
-      function ($scope, $location, TaskService, CategoryService) {
+    .controller('MainController', ['$scope', '$location', 'TaskService', 'CategoryService', 'AuthService',
+      function ($scope, $location, TaskService, CategoryService, AuthService) {
 
         $scope.categories   = [];
         $scope.toasts       = [];
@@ -77,7 +77,23 @@
             $scope.categories = res.data.courses || [];
           });
         };
-        $scope.loadCategories();
+
+        // React whenever the logged-in user changes (login / logout / page-load check)
+        $scope.$watch(function () { return $scope.$root.currentUser; }, function (user) {
+          if (user) {
+            $scope.loadCategories();
+          } else {
+            $scope.categories = [];
+          }
+        });
+
+        $scope.logout = function () {
+          AuthService.logout().then(function () {
+            $scope.$root.currentUser = null;
+            $scope.categories = [];
+            $location.path('/login');
+          });
+        };
 
         // Toast helper
         $scope.addToast = function (message, type) {
@@ -444,6 +460,65 @@
 
         $scope.$on('taskCreated',       function (e, t) { $scope.tasks.unshift(t); });
         $scope.$on('categoriesUpdated', function ()     { CategoryService.getCategories().then(function (r) { $scope.categories = r.data.courses || []; }); });
+      }
+    ])
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // AuthController – Login and Register
+  // ════════════════════════════════════════════════════════════════════════════
+    .controller('AuthController', ['$scope', '$rootScope', '$location', 'AuthService',
+      function ($scope, $rootScope, $location, AuthService) {
+        $scope.user = { email: '', password: '', full_name: '' };
+        $scope.error = '';
+        $scope.isLoading = false;
+
+        $scope.login = function() {
+          $scope.error = '';
+          $scope.isLoading = true;
+          AuthService.login($scope.user).then(function(res) {
+            if (res.data.success) {
+              // Set currentUser immediately so navbar appears without a round-trip
+              $rootScope.currentUser = res.data.user;
+              $location.path('/dashboard');
+            }
+          }).catch(function(err) {
+            $scope.error = (err.data && err.data.error) || 'Invalid email or password.';
+          }).finally(function() {
+            $scope.isLoading = false;
+          });
+        };
+
+        $scope.register = function() {
+          $scope.error = '';
+          $scope.isLoading = true;
+          AuthService.register($scope.user).then(function(res) {
+            if (res.data.success) {
+              $location.path('/login');
+            }
+          }).catch(function(err) {
+            $scope.error = (err.data && err.data.error) || 'Registration failed.';
+          }).finally(function() {
+            $scope.isLoading = false;
+          });
+        };
+      }
+    ])
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // AdminController – Manage Users
+  // ════════════════════════════════════════════════════════════════════════════
+    .controller('AdminController', ['$scope', 'AuthService',
+      function ($scope, AuthService) {
+        $scope.users = [];
+        $scope.isLoading = true;
+
+        AuthService.getUsers().then(function(res) {
+          $scope.users = res.data.users || [];
+        }).catch(function() {
+          $scope.$parent.addToast('Failed to load users', 'danger');
+        }).finally(function() {
+          $scope.isLoading = false;
+        });
       }
     ]);
 

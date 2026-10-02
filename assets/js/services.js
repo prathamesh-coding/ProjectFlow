@@ -46,6 +46,31 @@
       this.deleteCategory = function (id) {
         return $http.post(base + 'delete_course.php', { id: id });
       };
+    }])
+
+    // ── Auth Service ────────────────────────────────────────────────────────
+    .service('AuthService', ['$http', function ($http) {
+      var base = 'api/';
+
+      this.login = function (credentials) {
+        return $http.post(base + 'login.php', credentials);
+      };
+
+      this.register = function (data) {
+        return $http.post(base + 'register.php', data);
+      };
+
+      this.logout = function () {
+        return $http.post(base + 'logout.php');
+      };
+
+      this.checkAuth = function () {
+        return $http.get(base + 'check_auth.php');
+      };
+
+      this.getUsers = function () {
+        return $http.get(base + 'get_users.php');
+      };
     }]);
 
 })();

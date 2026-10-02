@@ -1,19 +1,29 @@
 <?php
 /**
  * db_connect.php
- * PDO database connection helper. Outputs JSON headers.
+ * Supabase / PostgreSQL PDO connection helper.
+ * Reads credentials from environment variables (set in Render dashboard)
+ * or from a local .env file for development.
  */
 
-define('DB_HOST', 'localhost');
-define('DB_PORT', '3306');
-define('DB_NAME', 'student_pm');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_CHARSET', 'utf8mb4');
+// ── Load .env file for local development ────────────────────────────────────
+$_envFile = dirname(__DIR__) . '/.env';
+if (file_exists($_envFile)) {
+    foreach (file($_envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $_line) {
+        if (empty($_line) || $_line[0] === '#' || strpos($_line, '=') === false) continue;
+        [$_k, $_v] = explode('=', $_line, 2);
+        $k = trim($_k); $v = trim($_v);
+        putenv("$k=$v");
+        $_ENV[$k] = $v;
+    }
+}
+unset($_envFile, $_line, $_k, $_v, $k, $v);
 
-// Emit CORS + JSON headers for every API response
+// ── CORS + JSON headers ──────────────────────────────────────────────────────
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+$origin = getenv('FRONTEND_URL') ?: '*';
+header("Access-Control-Allow-Origin: $origin");
+header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
@@ -22,27 +32,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// ── Secure session configuration ─────────────────────────────────────────────
+$isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+         || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+
+session_set_cookie_params([
+    'lifetime' => 86400 * 7,   // 7 days
+    'path'     => '/',
+    'secure'   => $isSecure,
+    'httponly' => true,
+    'samesite' => 'Lax',
+]);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// ── Database connection ───────────────────────────────────────────────────────
 function getDB(): PDO {
     static $pdo = null;
-    if ($pdo === null) {
-        $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=%s',
-            DB_HOST, DB_PORT, DB_NAME, DB_CHARSET);
-        $options = [
+    if ($pdo !== null) return $pdo;
+
+    $host = getenv('DB_HOST') ?: 'localhost';
+    $port = getenv('DB_PORT') ?: '5432';
+    $db   = getenv('DB_NAME') ?: 'postgres';
+    $user = getenv('DB_USER') ?: 'postgres';
+    $pass = getenv('DB_PASS') ?: '';
+
+    $dsn = "pgsql:host=$host;port=$port;dbname=$db;sslmode=require";
+
+    try {
+        $pdo = new PDO($dsn, $user, $pass, [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-        ];
-        try {
-            $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
-        } catch (PDOException $e) {
-            http_response_code(500);
-            echo json_encode(['success' => false, 'error' => 'Database connection failed: ' . $e->getMessage()]);
-            exit;
-        }
+            // Must be TRUE for PgBouncer transaction-mode pooler (port 6543)
+            // which doesn't support server-side prepared statements.
+            PDO::ATTR_EMULATE_PREPARES   => true,
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Database connection failed']);
+        exit;
     }
+
     return $pdo;
 }
 
+// ── JSON response helpers ─────────────────────────────────────────────────────
 function jsonResponse(array $data, int $status = 200): void {
     http_response_code($status);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);

@@ -1,0 +1,47 @@
+<div class="mb-4 d-flex justify-content-between align-items-center">
+  <h1 class="h3 mb-0 fw-bold">Admin Dashboard</h1>
+  <span class="badge bg-primary fs-6 py-2 px-3"><i class="bi bi-shield-lock me-2"></i>Admin Access</span>
+</div>
+
+<div class="card p-0 shadow-sm border-0 overflow-hidden">
+  <div class="card-body p-0">
+    <div class="p-5 text-center text-muted" ng-if="isLoading">
+      <div class="spinner-border text-primary me-2" role="status"></div> Loading users...
+    </div>
+    
+    <div class="table-responsive" ng-if="!isLoading">
+      <table class="table table-hover table-borderless align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-4 text-muted small text-uppercase">User Name</th>
+            <th class="text-muted small text-uppercase">Email</th>
+            <th class="text-muted small text-uppercase">Role</th>
+            <th class="text-muted small text-uppercase">Registered On</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr ng-repeat="u in users">
+            <td class="ps-4 fw-medium">
+              <div class="d-flex align-items-center">
+                <div class="avatar bg-primary text-white me-3 d-flex align-items-center justify-content-center fw-bold" style="width: 36px; height: 36px; border-radius: 50%; font-size: 16px;">
+                  {{ u.full_name.charAt(0).toUpperCase() }}
+                </div>
+                {{ u.full_name }}
+              </div>
+            </td>
+            <td class="text-secondary">{{ u.email }}</td>
+            <td>
+              <span class="badge rounded-pill" ng-class="{'bg-success text-white': u.role === 'admin', 'bg-secondary bg-opacity-10 text-secondary': u.role === 'student'}" style="font-size: 0.8rem; padding: 0.4em 0.8em;">
+                {{ u.role | uppercase }}
+              </span>
+            </td>
+            <td class="text-muted">{{ u.created_at | shortDate }}</td>
+          </tr>
+          <tr ng-if="users.length === 0">
+            <td colspan="4" class="text-center py-5 text-muted">No users found.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

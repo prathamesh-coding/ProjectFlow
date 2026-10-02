@@ -10,11 +10,65 @@
   // ─── Route Configuration ──────────────────────────────────────────────────
   app.config(['$routeProvider', function ($routeProvider) {
     $routeProvider
-      .when('/dashboard', { templateUrl: 'views/dashboard.html', controller: 'DashboardController' })
-      .when('/database',  { templateUrl: 'views/database.html',  controller: 'DatabaseController'  })
-      .when('/notes',     { templateUrl: 'views/notes.html',     controller: 'NotesController'     })
-      .when('/notes/:id', { templateUrl: 'views/notes.html',     controller: 'NotesController'     })
+      .when('/login',     { templateUrl: 'views/login.html',     controller: 'AuthController'      })
+      .when('/register',  { templateUrl: 'views/register.html',  controller: 'AuthController'      })
+      .when('/dashboard', { templateUrl: 'views/dashboard.html', controller: 'DashboardController', requireAuth: true })
+      .when('/database',  { templateUrl: 'views/database.html',  controller: 'DatabaseController',  requireAuth: true })
+      .when('/notes',     { templateUrl: 'views/notes.html',     controller: 'NotesController',     requireAuth: true })
+      .when('/notes/:id', { templateUrl: 'views/notes.html',     controller: 'NotesController',     requireAuth: true })
+      .when('/admin',     { templateUrl: 'views/admin.html',     controller: 'AdminController',     requireAuth: true, requireAdmin: true })
       .otherwise({ redirectTo: '/dashboard' });
+  }]);
+
+  app.run(['$rootScope', '$location', 'AuthService', '$q', function($rootScope, $location, AuthService, $q) {
+    $rootScope.currentUser = null;
+    var _guardResolvedPath = null; // tracks path that guard already approved
+
+    // ── 1. Check session ONCE on page load; store the promise so guard can wait ──
+    var _authPromise = AuthService.checkAuth().then(function(res) {
+      if (res.data.authenticated) {
+        $rootScope.currentUser = res.data.user;
+      }
+    }, function() {
+      // Network error → treat as unauthenticated
+      $rootScope.currentUser = null;
+    });
+
+    // ── 2. Route guard ────────────────────────────────────────────────────────
+    $rootScope.$on('$routeChangeStart', function(event, next) {
+      var route   = next.$$route || {};
+      var reqPath = next.$$route ? (next.$$route.originalPath || '') : '';
+
+      // If this navigation was triggered by the guard itself, let it through
+      if (_guardResolvedPath && _guardResolvedPath === reqPath) {
+        _guardResolvedPath = null;
+        return;
+      }
+
+      if (route.requireAuth) {
+        event.preventDefault(); // pause navigation until auth is known
+
+        _authPromise.then(function() {
+          if (!$rootScope.currentUser) {
+            $location.path('/login');
+          } else if (route.requireAdmin && $rootScope.currentUser.role !== 'admin') {
+            $location.path('/dashboard');
+          } else {
+            // Authenticated and authorized — proceed
+            _guardResolvedPath = reqPath;
+            $location.path(reqPath);
+          }
+        });
+      } else if (route.controller === 'AuthController') {
+        // On login/register pages, if already authenticated → go to dashboard
+        _authPromise.then(function() {
+          if ($rootScope.currentUser) {
+            event.preventDefault();
+            $location.path('/dashboard');
+          }
+        });
+      }
+    });
   }]);
 
   // ─── Countdown Filter ─────────────────────────────────────────────────────
