@@ -18,5 +18,11 @@ node_modules/
 # ── Gemini AI generated files ─────────────────────────────────────────────────
 gemini-code-*.md
 
-*.md
 jira-styleguide.html
+authentication_and_admin_feature_spec.md
+data_model_specification.md
+product_requirements_document.md
+system_architecture_document(1).md
+system_design_document(1).md
+system_flow_diagram_logic.md
+TEST_REPORT_QA_Comprehensive.md
